@@ -1,5 +1,6 @@
 require('dotenv').config()
 const Discord = require('discord.js')
+const keepAlive = require("./server")
 const fs = require('fs')
 
 const client = new Discord.Client({
@@ -32,4 +33,6 @@ client.on('messageCreate', message => {
     if (command === 'reactionrole') client.commands.get('reactionrole').execute(message, args, Discord, client, channelID)
 })
 
+
+keepAlive()
 client.login(tokenID)
