@@ -1,81 +1,57 @@
+// Emoji → role name. The roles must already exist in the server.
+const ROLES = {
+    '🔫': 'Counter Player',
+    '🚙': 'Rocket Player',
+    '🎯': 'Valorant Player',
+}
+
+const GAMES = {
+    '🔫': 'CS:GO',
+    '🚙': 'Rocket League',
+    '🎯': 'Valorant',
+}
+
 module.exports = {
     name: 'reactionrole',
     description: 'Sets up a reaction role message',
-    async execute(message, args, Discord, client, channelID) {
-        const channel = channelID
 
-        const counterPlayers = message.guild.roles.cache.find(r => r.name === 'Counter Player')
-        const rocketPlayers = message.guild.roles.cache.find(r => r.name === 'Rocket Player')
-        const valorantPlayers = message.guild.roles.cache.find(r => r.name === 'Valorant Player')
-
-        const counterPlayersReact = '🔫'
-        const rocketPlayersReact = '🚙'
-        const valorantPlayersReact = '🏳️‍🌈'
-
-        let embed = new Discord.EmbedBuilder()
+    // Posts the role picker. Reactions are handled once, globally, in index.js
+    // through handleReaction — not here, so calling the command again does not
+    // stack duplicate listeners.
+    async execute(message, args, Discord) {
+        const embed = new Discord.EmbedBuilder()
             .setColor('#e42643')
             .setTitle('Choose a role to be added in')
             .setDescription(
                 'Choosing a role will let others tag you easily if they need someone for a game\n\n' +
-                    `${counterPlayersReact} for CS:GO\n\n` +
-                    `${rocketPlayersReact} for Rocket League\n\n` +
-                    `${valorantPlayersReact} for Valorant`,
+                    Object.entries(GAMES)
+                        .map(([emoji, game]) => `${emoji} for ${game}`)
+                        .join('\n\n'),
             )
-        let messageEmbed = await message.channel.send({ embeds: [embed] })
-        messageEmbed.react(counterPlayersReact)
-        messageEmbed.react(rocketPlayersReact)
-        messageEmbed.react(valorantPlayersReact)
 
-        client.on('messageReactionAdd', async (reaction, user) => {
-            if (reaction.message.partial) await reaction.message.fetch()
-            if (reaction.partial) await reaction.fetch()
-            if (user.bot) return
-            if (!reaction.message.guild) return
+        const messageEmbed = await message.channel.send({ embeds: [embed] })
+        for (const emoji of Object.keys(ROLES)) await messageEmbed.react(emoji)
+    },
 
-            if (reaction.message.channel.id === channelID) {
-                switch (reaction.emoji.name) {
-                    case counterPlayersReact:
-                        return await reaction.message.guild.members.cache
-                            .get(user.id)
-                            .roles.add(counterPlayers)
-                    case rocketPlayersReact:
-                        return await reaction.message.guild.members.cache
-                            .get(user.id)
-                            .roles.add(rocketPlayers)
-                    case valorantPlayersReact:
-                        return await reaction.message.guild.members.cache
-                            .get(user.id)
-                            .roles.add(valorantPlayers)
-                    default:
-                        break
-                }
-            } else return
-        })
+    // action: 'add' | 'remove'
+    async handleReaction(reaction, user, action, client, channelID) {
+        if (reaction.partial) await reaction.fetch()
+        if (reaction.message.partial) await reaction.message.fetch()
+        if (user.bot) return
 
-        client.on('messageReactionRemove', async (reaction, user) => {
-            if (reaction.message.partial) await reaction.message.fetch()
-            if (reaction.partial) await reaction.fetch()
-            if (user.bot) return
-            if (!reaction.message.guild) return
+        const { message } = reaction
+        if (!message.guild) return
+        if (message.channel.id !== channelID) return
+        // Only the picker posted by this bot assigns roles.
+        if (message.author?.id !== client.user.id) return
 
-            if (reaction.message.channel.id === channelID) {
-                switch (reaction.emoji.name) {
-                    case counterPlayersReact:
-                        return await reaction.message.guild.members.cache
-                            .get(user.id)
-                            .roles.remove(counterPlayers)
-                    case rocketPlayersReact:
-                        return await reaction.message.guild.members.cache
-                            .get(user.id)
-                            .roles.remove(rocketPlayers)
-                    case valorantPlayersReact:
-                        return await reaction.message.guild.members.cache
-                            .get(user.id)
-                            .roles.remove(valorantPlayers)
-                    default:
-                        break
-                }
-            } else return
-        })
+        const roleName = ROLES[reaction.emoji.name]
+        if (!roleName) return
+
+        const role = message.guild.roles.cache.find((r) => r.name === roleName)
+        if (!role) return console.warn(`Role "${roleName}" not found`)
+
+        const member = await message.guild.members.fetch(user.id)
+        await member.roles[action](role)
     },
 }
